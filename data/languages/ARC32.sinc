@@ -1,650 +1,637 @@
+# SLEIGH specification for the legacy 32-bit ARC instruction set (ARCtangent-A4 and the earlier
+# ARC basecase cores; binutils calls it "arc"), shared by ARC32_le.slaspec and ARC32_be.slaspec.
+#
+# Originally written by cyrozap (Ghidra pull request #3233, Apache License 2.0). Reworked by
+# Ghidra-Rare after differential testing against GNU binutils 2.25.1 (the last release with this
+# target) and the ARCtangent-A4 Programmer's Reference (ARC International, 5050-001, 2002); see
+# CREDITS.md for the list of changes.
+#
+# Instruction words are 32 bits, optionally followed by a 32-bit long immediate (limm). Syntax
+# follows objdump 2.25.1: condition names z/nz/p/n/c/nc/v/nv, ".f" before the delay-slot mode,
+# "0" for a discarded destination, mov/asl/rlc for and/add/adc with equal source operands.
+
 define alignment=4;
 
 define space ram type=ram_space size=4 default;
-define space auxregs type=ram_space size=4;
 define space register type=register_space size=4;
 
-# Core register set
+# Auxiliary registers, addressed by register number (32-bit words; instructions lr and sr)
+define space auxregs type=ram_space size=4 wordsize=4;
+
+# Core register set. r26-r31 have the binutils names; r57-r59 are MLO/MMID/MHI of the optional
+# 32x32 multiplier; r60 is LP_COUNT; 61-63 are the immediate-data indicators (never registers).
 define register offset=0 size=4 [
-	 r0  r1  r2  r3
-	 r4  r5  r6  r7
-	 r8  r9 r10 r11
-	r12 r13 r14 r15
-	r16 r17 r18 r19
-	r20 r21 r22 r23
-	r24 r25
-	gp
-	fp
-	sp
-	ilink1
-	ilink2
-	blink
-	r32 r33 r34 r35
-	r36 r37 r38 r39
-	r40 r41 r42 r43
-	r44 r45 r46 r47
-	r48 r49 r50 r51
-	r52 r53 r54 r55
-	r56 r57 r58 r59
-	lp_count
-	    r61 r62 r63
+	 r0  r1  r2  r3  r4  r5  r6  r7  r8  r9 r10 r11 r12 r13 r14 r15
+	r16 r17 r18 r19 r20 r21 r22 r23 r24 r25  gp  fp  sp ilink1 ilink2 blink
+	r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47
+	r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 lp_count r61 r62 r63
 ];
 
-# Auxiliary register set (incomplete)
-define register offset=0x1000 size=4 [
-	status
-	semaphore
-	lp_start
-	lp_end
-	identity
-	debug
-	                                      ar6   ar7
-	  ar8   ar9  ar10  ar11  ar12  ar13  ar14  ar15
-	 ar16  ar17  ar18  ar19  ar20  ar21  ar22  ar23
-	 ar24  ar25  ar26  ar27  ar28  ar29  ar30  ar31
-	 ar32  ar33  ar34  ar35  ar36  ar37  ar38  ar39
-	 ar40  ar41  ar42  ar43  ar44  ar45  ar46  ar47
-	 ar48  ar49  ar50  ar51  ar52  ar53  ar54  ar55
-	 ar56  ar57  ar58  ar59  ar60  ar61  ar62  ar63
-	 ar64  ar65  ar66  ar67  ar68  ar69  ar70  ar71
-	 ar72  ar73  ar74  ar75  ar76  ar77  ar78  ar79
-	 ar80  ar81  ar82  ar83  ar84  ar85  ar86  ar87
-	 ar88  ar89  ar90  ar91  ar92  ar93  ar94  ar95
-	 ar96  ar97  ar98  ar99 ar100 ar101 ar102 ar103
-	ar104 ar105 ar106 ar107 ar108 ar109 ar110 ar111
-	ar112 ar113 ar114 ar115 ar116 ar117 ar118 ar119
-	ar120 ar121 ar122 ar123 ar124 ar125 ar126 ar127
-	ar128 ar129 ar130 ar131 ar132 ar133 ar134 ar135
-	ar136 ar137 ar138 ar139 ar140 ar141 ar142 ar143
-	ar144 ar145 ar146 ar147 ar148 ar149 ar150 ar151
-	ar152 ar153 ar154 ar155 ar156 ar157 ar158 ar159
-	ar160 ar161 ar162 ar163 ar164 ar165 ar166 ar167
-	ar168 ar169 ar170 ar171 ar172 ar173 ar174 ar175
-	ar176 ar177 ar178 ar179 ar180 ar181 ar182 ar183
-	ar184 ar185 ar186 ar187 ar188 ar189 ar190 ar191
-	ar192 ar193 ar194 ar195 ar196 ar197 ar198 ar199
-	ar200 ar201 ar202 ar203 ar204 ar205 ar206 ar207
-	ar208 ar209 ar210 ar211 ar212 ar213 ar214 ar215
-	ar216 ar217 ar218 ar219 ar220 ar221 ar222 ar223
-	ar224 ar225 ar226 ar227 ar228 ar229 ar230 ar231
-	ar232 ar233 ar234 ar235 ar236 ar237 ar238 ar239
-	ar240 ar241 ar242 ar243 ar244 ar245 ar246 ar247
-	ar248 ar249 ar250 ar251 ar252 ar253 ar254 ar255
-];
+# STATUS register bits: condition flags Z N C V, interrupt enables E1 E2, halt bit H
+define register offset=0x200 size=1 [ Z N C V E1 E2 H ];
 
-define register offset=0x2000 size=1 [
-	# Condition codes.
-	Z   # Zero
-	NE  # Negative
-	CY  # Carry
-	V   # Overflow
-	E1  # Enable level 1 interrupts
-	E2  # Enable level 2 interrupts
-	H   # Halt
-
-	loop_enable
-];
-
-define register offset=0x3000 size=4 [
-	pc
-];
-
-define register offset=0x4000 size=4 [
-	dummy_write  # Dummy register to send writes to when the destination register points to an immediate.
-	contextreg
-];
+# Set by lp (the zero-overhead loop is active); destination of discarded results
+define register offset=0x210 size=1 [ is_in_loop ];
+define register offset=0x220 size=4 [ discard contextreg pc ];
 
 define context contextreg
-	# Instruction decoding phase.
-	phase = (0, 0)
-
-	# Indicate that this is the last instruction in a loop.
-	end_of_loop = (1, 1) noflow
+	phase     = (0, 0)
+	loopEnd   = (1, 1) noflow   # this instruction is at LP_END of a loop set up by lp
+	loopStart = (2, 31) noflow  # LP_START / 4 of that loop
 ;
 
 define token instr(32)
-	I = (27, 31)
-	A = (21, 26)
-	B = (15, 20)
-	C = (9, 14)
-	D = (0, 8) signed
-	D2 = (0, 8) signed
+	I    = (27, 31)
+	A    = (21, 26)
+	Ar   = (21, 26)
+	B    = (15, 20)
+	Br   = (15, 20)
+	fc   = (9, 14)
+	Cr   = (9, 14)
+	Csub = (9, 14)
 
-	L = (7, 26) signed
-	F = (8, 8)
-	N = (5, 6)
-	Q = (0, 4)
+	# Bits of A, B and C, for patterns that exclude the immediate indicators 61-63. SLEIGH expands a
+	# range constraint such as (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb1=0 & Bb0=0)) into one pattern per value, and the products of those
+	# expansions made the decision tree explode (a 143 MB .sla that Ghidra failed to load);
+	# these fields express the same sets as a few disjoint bit patterns.
+	At  = (23, 26)
+	Ab5 = (26, 26)
+	Ab4 = (25, 25)
+	Ab3 = (24, 24)
+	Ab1 = (22, 22)
+	Ab0 = (21, 21)
+	Bt  = (17, 20)
+	Bb5 = (20, 20)
+	Bb4 = (19, 19)
+	Bb3 = (18, 18)
+	Bb1 = (16, 16)
+	Bb0 = (15, 15)
+	Ct  = (11, 14)
+	Cb5 = (14, 14)
+	Cb4 = (13, 13)
+	Cb3 = (12, 12)
+	Cb1 = (10, 10)
+	Cb0 = (9, 9)
+	D    = (0, 8) signed
+	D2   = (0, 8) signed
+	Du   = (0, 8)
+	F    = (8, 8)
+	Nul  = (5, 6)
+	Q    = (0, 4)
+	L    = (7, 26) signed
+	cjl  = (9, 9)
 
-	# ST fields
+	# LD, register + register form (I=0): bits 5..0
+	lg_Di = (5, 5)
+	lg_A  = (3, 3)
+	lg_Z  = (1, 2)
+	lg_X  = (0, 0)
+
+	# LD, register + offset form and LR (I=1): the C field
+	ls_Di = (14, 14)
+	ls_LR = (13, 13)
+	ls_A  = (12, 12)
+	ls_Z  = (10, 11)
+	ls_X  = (9, 9)
+
+	# ST and SR (I=2): the A field
 	st_Di = (26, 26)
-	st_25 = (25, 25)
+	st_SR = (25, 25)
 	st_A  = (24, 24)
 	st_Z  = (22, 23)
-	st_21 = (21, 21)
-
-	# LD, generic
-	ldg_Di = (5, 5)
-	ldg_A  = (3, 3)
-	ldg_Z  = (1, 2)
-	ldg_X  = (0, 0)
-
-	# LD, simm
-	lds_Di = (14, 14)
-	lds_13 = (13, 13)
-	lds_A  = (12, 12)
-	lds_Z  = (10, 11)
-	lds_X  = (9, 9)
-
-	# LR/SR
-	ar_D = (0, 7)
 ;
 
-define token imm(32)
-	Limm = (0, 31)
+define token limmtok(32)
+	limm = (0, 31)
+	limm2 = (0, 31)
 ;
 
-attach variables [ A B C ] [
-	 r0  r1  r2  r3
-	 r4  r5  r6  r7
-	 r8  r9 r10 r11
-	r12 r13 r14 r15
-	r16 r17 r18 r19
-	r20 r21 r22 r23
-	r24 r25
-	gp
-	fp
-	sp
-	ilink1
-	ilink2
-	blink
-	r32 r33 r34 r35
-	r36 r37 r38 r39
-	r40 r41 r42 r43
-	r44 r45 r46 r47
-	r48 r49 r50 r51
-	r52 r53 r54 r55
-	r56 r57 r58 r59
-	lp_count
-	    r61 r62 r63
+attach variables [ A B fc ] [
+	 r0  r1  r2  r3  r4  r5  r6  r7  r8  r9 r10 r11 r12 r13 r14 r15
+	r16 r17 r18 r19 r20 r21 r22 r23 r24 r25  gp  fp  sp ilink1 ilink2 blink
+	r32 r33 r34 r35 r36 r37 r38 r39 r40 r41 r42 r43 r44 r45 r46 r47
+	r48 r49 r50 r51 r52 r53 r54 r55 r56 r57 r58 r59 lp_count r61 r62 r63
 ];
 
-attach variables [ ar_D ] [
-	status
-	semaphore
-	lp_start
-	lp_end
-	identity
-	debug
-	                                      ar6   ar7
-	  ar8   ar9  ar10  ar11  ar12  ar13  ar14  ar15
-	 ar16  ar17  ar18  ar19  ar20  ar21  ar22  ar23
-	 ar24  ar25  ar26  ar27  ar28  ar29  ar30  ar31
-	 ar32  ar33  ar34  ar35  ar36  ar37  ar38  ar39
-	 ar40  ar41  ar42  ar43  ar44  ar45  ar46  ar47
-	 ar48  ar49  ar50  ar51  ar52  ar53  ar54  ar55
-	 ar56  ar57  ar58  ar59  ar60  ar61  ar62  ar63
-	 ar64  ar65  ar66  ar67  ar68  ar69  ar70  ar71
-	 ar72  ar73  ar74  ar75  ar76  ar77  ar78  ar79
-	 ar80  ar81  ar82  ar83  ar84  ar85  ar86  ar87
-	 ar88  ar89  ar90  ar91  ar92  ar93  ar94  ar95
-	 ar96  ar97  ar98  ar99 ar100 ar101 ar102 ar103
-	ar104 ar105 ar106 ar107 ar108 ar109 ar110 ar111
-	ar112 ar113 ar114 ar115 ar116 ar117 ar118 ar119
-	ar120 ar121 ar122 ar123 ar124 ar125 ar126 ar127
-	ar128 ar129 ar130 ar131 ar132 ar133 ar134 ar135
-	ar136 ar137 ar138 ar139 ar140 ar141 ar142 ar143
-	ar144 ar145 ar146 ar147 ar148 ar149 ar150 ar151
-	ar152 ar153 ar154 ar155 ar156 ar157 ar158 ar159
-	ar160 ar161 ar162 ar163 ar164 ar165 ar166 ar167
-	ar168 ar169 ar170 ar171 ar172 ar173 ar174 ar175
-	ar176 ar177 ar178 ar179 ar180 ar181 ar182 ar183
-	ar184 ar185 ar186 ar187 ar188 ar189 ar190 ar191
-	ar192 ar193 ar194 ar195 ar196 ar197 ar198 ar199
-	ar200 ar201 ar202 ar203 ar204 ar205 ar206 ar207
-	ar208 ar209 ar210 ar211 ar212 ar213 ar214 ar215
-	ar216 ar217 ar218 ar219 ar220 ar221 ar222 ar223
-	ar224 ar225 ar226 ar227 ar228 ar229 ar230 ar231
-	ar232 ar233 ar234 ar235 ar236 ar237 ar238 ar239
-	ar240 ar241 ar242 ar243 ar244 ar245 ar246 ar247
-	ar248 ar249 ar250 ar251 ar252 ar253 ar254 ar255
+attach names [ Csub ] [
+	extsop00 extsop01 extsop02 extsop03 extsop04 extsop05 extsop06 extsop07
+	extsop08 extsop09 extsop0a extsop0b extsop0c extsop0d extsop0e extsop0f
+	extsop10 extsop11 extsop12 extsop13 extsop14 extsop15 extsop16 extsop17
+	extsop18 extsop19 extsop1a extsop1b extsop1c extsop1d extsop1e extsop1f
+	extsop20 extsop21 extsop22 extsop23 extsop24 extsop25 extsop26 extsop27
+	extsop28 extsop29 extsop2a extsop2b extsop2c extsop2d extsop2e extsop2f
+	extsop30 extsop31 extsop32 extsop33 extsop34 extsop35 extsop36 extsop37
+	extsop38 extsop39 extsop3a extsop3b extsop3c extsop3d extsop3e extsop3f
 ];
 
+define pcodeop brk;
+define pcodeop sleep;
+define pcodeop swi;
+define pcodeop ext_condition;    # extension condition codes 0x10-0x1f (core specific)
+define pcodeop ext_instruction;  # extension instructions (core specific)
 
-define pcodeop DebugBreak;
-define pcodeop ProcessorSleep;
-define pcodeop SoftwareInterrupt;
+# ---------------------------------------------------------------------------------------------
+# Operands
 
+# Destination: a core register, or a discarded result when A holds an immediate indicator
+dst: A     is (Ab5=0 | (Ab5=1 & Ab4=0) | (Ab5=1 & Ab4=1 & Ab3=0) | At=14 | (At=15 & Ab1=0 & Ab0=0)) & A    { export A; }
+dst: "0"   is (At=15 & (Ab1=1 | (Ab1=0 & Ab0=1)))       { export discard; }
 
-macro resultflags(dst) { # Set Z flag for results
-	Z = dst == 0;
-	NE = ((dst >> 31) & 1) != 0;
+# Source operands: register, short immediate (61/63, the 9-bit signed D field) or long immediate
+srcB: B      is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb1=0 & Bb0=0)) & B         { export B; }
+srcB: D      is (Br=61 | Br=63) & D { export *[const]:4 D; }
+srcB: limm   is Br=62; limm       { export *[const]:4 limm; }
+srcC: fc      is (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb1=0 & Cb0=0)) & fc         { export fc; }
+srcC: D      is (Cr=61 | Cr=63) & D { export *[const]:4 D; }
+srcC: limm   is Cr=62; limm       { export *[const]:4 limm; }
+
+# add/adc/and with equal B and C fields are shown as asl/rlc/mov a,b (objdump)
+addm: "asl" is Br=0 & Cr=0 {}
+addm: "asl" is Br=1 & Cr=1 {}
+addm: "asl" is Br=2 & Cr=2 {}
+addm: "asl" is Br=3 & Cr=3 {}
+addm: "asl" is Br=4 & Cr=4 {}
+addm: "asl" is Br=5 & Cr=5 {}
+addm: "asl" is Br=6 & Cr=6 {}
+addm: "asl" is Br=7 & Cr=7 {}
+addm: "asl" is Br=8 & Cr=8 {}
+addm: "asl" is Br=9 & Cr=9 {}
+addm: "asl" is Br=10 & Cr=10 {}
+addm: "asl" is Br=11 & Cr=11 {}
+addm: "asl" is Br=12 & Cr=12 {}
+addm: "asl" is Br=13 & Cr=13 {}
+addm: "asl" is Br=14 & Cr=14 {}
+addm: "asl" is Br=15 & Cr=15 {}
+addm: "asl" is Br=16 & Cr=16 {}
+addm: "asl" is Br=17 & Cr=17 {}
+addm: "asl" is Br=18 & Cr=18 {}
+addm: "asl" is Br=19 & Cr=19 {}
+addm: "asl" is Br=20 & Cr=20 {}
+addm: "asl" is Br=21 & Cr=21 {}
+addm: "asl" is Br=22 & Cr=22 {}
+addm: "asl" is Br=23 & Cr=23 {}
+addm: "asl" is Br=24 & Cr=24 {}
+addm: "asl" is Br=25 & Cr=25 {}
+addm: "asl" is Br=26 & Cr=26 {}
+addm: "asl" is Br=27 & Cr=27 {}
+addm: "asl" is Br=28 & Cr=28 {}
+addm: "asl" is Br=29 & Cr=29 {}
+addm: "asl" is Br=30 & Cr=30 {}
+addm: "asl" is Br=31 & Cr=31 {}
+addm: "asl" is Br=32 & Cr=32 {}
+addm: "asl" is Br=33 & Cr=33 {}
+addm: "asl" is Br=34 & Cr=34 {}
+addm: "asl" is Br=35 & Cr=35 {}
+addm: "asl" is Br=36 & Cr=36 {}
+addm: "asl" is Br=37 & Cr=37 {}
+addm: "asl" is Br=38 & Cr=38 {}
+addm: "asl" is Br=39 & Cr=39 {}
+addm: "asl" is Br=40 & Cr=40 {}
+addm: "asl" is Br=41 & Cr=41 {}
+addm: "asl" is Br=42 & Cr=42 {}
+addm: "asl" is Br=43 & Cr=43 {}
+addm: "asl" is Br=44 & Cr=44 {}
+addm: "asl" is Br=45 & Cr=45 {}
+addm: "asl" is Br=46 & Cr=46 {}
+addm: "asl" is Br=47 & Cr=47 {}
+addm: "asl" is Br=48 & Cr=48 {}
+addm: "asl" is Br=49 & Cr=49 {}
+addm: "asl" is Br=50 & Cr=50 {}
+addm: "asl" is Br=51 & Cr=51 {}
+addm: "asl" is Br=52 & Cr=52 {}
+addm: "asl" is Br=53 & Cr=53 {}
+addm: "asl" is Br=54 & Cr=54 {}
+addm: "asl" is Br=55 & Cr=55 {}
+addm: "asl" is Br=56 & Cr=56 {}
+addm: "asl" is Br=57 & Cr=57 {}
+addm: "asl" is Br=58 & Cr=58 {}
+addm: "asl" is Br=59 & Cr=59 {}
+addm: "asl" is Br=60 & Cr=60 {}
+addm: "asl" is Br=61 & Cr=61 {}
+addm: "asl" is Br=62 & Cr=62 {}
+addm: "asl" is Br=63 & Cr=63 {}
+addm: "add" is epsilon {}
+adcm: "rlc" is Br=0 & Cr=0 {}
+adcm: "rlc" is Br=1 & Cr=1 {}
+adcm: "rlc" is Br=2 & Cr=2 {}
+adcm: "rlc" is Br=3 & Cr=3 {}
+adcm: "rlc" is Br=4 & Cr=4 {}
+adcm: "rlc" is Br=5 & Cr=5 {}
+adcm: "rlc" is Br=6 & Cr=6 {}
+adcm: "rlc" is Br=7 & Cr=7 {}
+adcm: "rlc" is Br=8 & Cr=8 {}
+adcm: "rlc" is Br=9 & Cr=9 {}
+adcm: "rlc" is Br=10 & Cr=10 {}
+adcm: "rlc" is Br=11 & Cr=11 {}
+adcm: "rlc" is Br=12 & Cr=12 {}
+adcm: "rlc" is Br=13 & Cr=13 {}
+adcm: "rlc" is Br=14 & Cr=14 {}
+adcm: "rlc" is Br=15 & Cr=15 {}
+adcm: "rlc" is Br=16 & Cr=16 {}
+adcm: "rlc" is Br=17 & Cr=17 {}
+adcm: "rlc" is Br=18 & Cr=18 {}
+adcm: "rlc" is Br=19 & Cr=19 {}
+adcm: "rlc" is Br=20 & Cr=20 {}
+adcm: "rlc" is Br=21 & Cr=21 {}
+adcm: "rlc" is Br=22 & Cr=22 {}
+adcm: "rlc" is Br=23 & Cr=23 {}
+adcm: "rlc" is Br=24 & Cr=24 {}
+adcm: "rlc" is Br=25 & Cr=25 {}
+adcm: "rlc" is Br=26 & Cr=26 {}
+adcm: "rlc" is Br=27 & Cr=27 {}
+adcm: "rlc" is Br=28 & Cr=28 {}
+adcm: "rlc" is Br=29 & Cr=29 {}
+adcm: "rlc" is Br=30 & Cr=30 {}
+adcm: "rlc" is Br=31 & Cr=31 {}
+adcm: "rlc" is Br=32 & Cr=32 {}
+adcm: "rlc" is Br=33 & Cr=33 {}
+adcm: "rlc" is Br=34 & Cr=34 {}
+adcm: "rlc" is Br=35 & Cr=35 {}
+adcm: "rlc" is Br=36 & Cr=36 {}
+adcm: "rlc" is Br=37 & Cr=37 {}
+adcm: "rlc" is Br=38 & Cr=38 {}
+adcm: "rlc" is Br=39 & Cr=39 {}
+adcm: "rlc" is Br=40 & Cr=40 {}
+adcm: "rlc" is Br=41 & Cr=41 {}
+adcm: "rlc" is Br=42 & Cr=42 {}
+adcm: "rlc" is Br=43 & Cr=43 {}
+adcm: "rlc" is Br=44 & Cr=44 {}
+adcm: "rlc" is Br=45 & Cr=45 {}
+adcm: "rlc" is Br=46 & Cr=46 {}
+adcm: "rlc" is Br=47 & Cr=47 {}
+adcm: "rlc" is Br=48 & Cr=48 {}
+adcm: "rlc" is Br=49 & Cr=49 {}
+adcm: "rlc" is Br=50 & Cr=50 {}
+adcm: "rlc" is Br=51 & Cr=51 {}
+adcm: "rlc" is Br=52 & Cr=52 {}
+adcm: "rlc" is Br=53 & Cr=53 {}
+adcm: "rlc" is Br=54 & Cr=54 {}
+adcm: "rlc" is Br=55 & Cr=55 {}
+adcm: "rlc" is Br=56 & Cr=56 {}
+adcm: "rlc" is Br=57 & Cr=57 {}
+adcm: "rlc" is Br=58 & Cr=58 {}
+adcm: "rlc" is Br=59 & Cr=59 {}
+adcm: "rlc" is Br=60 & Cr=60 {}
+adcm: "rlc" is Br=61 & Cr=61 {}
+adcm: "rlc" is Br=62 & Cr=62 {}
+adcm: "rlc" is Br=63 & Cr=63 {}
+adcm: "adc" is epsilon {}
+andm: "mov" is Br=0 & Cr=0 {}
+andm: "mov" is Br=1 & Cr=1 {}
+andm: "mov" is Br=2 & Cr=2 {}
+andm: "mov" is Br=3 & Cr=3 {}
+andm: "mov" is Br=4 & Cr=4 {}
+andm: "mov" is Br=5 & Cr=5 {}
+andm: "mov" is Br=6 & Cr=6 {}
+andm: "mov" is Br=7 & Cr=7 {}
+andm: "mov" is Br=8 & Cr=8 {}
+andm: "mov" is Br=9 & Cr=9 {}
+andm: "mov" is Br=10 & Cr=10 {}
+andm: "mov" is Br=11 & Cr=11 {}
+andm: "mov" is Br=12 & Cr=12 {}
+andm: "mov" is Br=13 & Cr=13 {}
+andm: "mov" is Br=14 & Cr=14 {}
+andm: "mov" is Br=15 & Cr=15 {}
+andm: "mov" is Br=16 & Cr=16 {}
+andm: "mov" is Br=17 & Cr=17 {}
+andm: "mov" is Br=18 & Cr=18 {}
+andm: "mov" is Br=19 & Cr=19 {}
+andm: "mov" is Br=20 & Cr=20 {}
+andm: "mov" is Br=21 & Cr=21 {}
+andm: "mov" is Br=22 & Cr=22 {}
+andm: "mov" is Br=23 & Cr=23 {}
+andm: "mov" is Br=24 & Cr=24 {}
+andm: "mov" is Br=25 & Cr=25 {}
+andm: "mov" is Br=26 & Cr=26 {}
+andm: "mov" is Br=27 & Cr=27 {}
+andm: "mov" is Br=28 & Cr=28 {}
+andm: "mov" is Br=29 & Cr=29 {}
+andm: "mov" is Br=30 & Cr=30 {}
+andm: "mov" is Br=31 & Cr=31 {}
+andm: "mov" is Br=32 & Cr=32 {}
+andm: "mov" is Br=33 & Cr=33 {}
+andm: "mov" is Br=34 & Cr=34 {}
+andm: "mov" is Br=35 & Cr=35 {}
+andm: "mov" is Br=36 & Cr=36 {}
+andm: "mov" is Br=37 & Cr=37 {}
+andm: "mov" is Br=38 & Cr=38 {}
+andm: "mov" is Br=39 & Cr=39 {}
+andm: "mov" is Br=40 & Cr=40 {}
+andm: "mov" is Br=41 & Cr=41 {}
+andm: "mov" is Br=42 & Cr=42 {}
+andm: "mov" is Br=43 & Cr=43 {}
+andm: "mov" is Br=44 & Cr=44 {}
+andm: "mov" is Br=45 & Cr=45 {}
+andm: "mov" is Br=46 & Cr=46 {}
+andm: "mov" is Br=47 & Cr=47 {}
+andm: "mov" is Br=48 & Cr=48 {}
+andm: "mov" is Br=49 & Cr=49 {}
+andm: "mov" is Br=50 & Cr=50 {}
+andm: "mov" is Br=51 & Cr=51 {}
+andm: "mov" is Br=52 & Cr=52 {}
+andm: "mov" is Br=53 & Cr=53 {}
+andm: "mov" is Br=54 & Cr=54 {}
+andm: "mov" is Br=55 & Cr=55 {}
+andm: "mov" is Br=56 & Cr=56 {}
+andm: "mov" is Br=57 & Cr=57 {}
+andm: "mov" is Br=58 & Cr=58 {}
+andm: "mov" is Br=59 & Cr=59 {}
+andm: "mov" is Br=60 & Cr=60 {}
+andm: "mov" is Br=61 & Cr=61 {}
+andm: "mov" is Br=62 & Cr=62 {}
+andm: "mov" is Br=63 & Cr=63 {}
+andm: "and" is epsilon {}
+opc: "" is Br=0 & Cr=0 {}
+opc: "" is Br=1 & Cr=1 {}
+opc: "" is Br=2 & Cr=2 {}
+opc: "" is Br=3 & Cr=3 {}
+opc: "" is Br=4 & Cr=4 {}
+opc: "" is Br=5 & Cr=5 {}
+opc: "" is Br=6 & Cr=6 {}
+opc: "" is Br=7 & Cr=7 {}
+opc: "" is Br=8 & Cr=8 {}
+opc: "" is Br=9 & Cr=9 {}
+opc: "" is Br=10 & Cr=10 {}
+opc: "" is Br=11 & Cr=11 {}
+opc: "" is Br=12 & Cr=12 {}
+opc: "" is Br=13 & Cr=13 {}
+opc: "" is Br=14 & Cr=14 {}
+opc: "" is Br=15 & Cr=15 {}
+opc: "" is Br=16 & Cr=16 {}
+opc: "" is Br=17 & Cr=17 {}
+opc: "" is Br=18 & Cr=18 {}
+opc: "" is Br=19 & Cr=19 {}
+opc: "" is Br=20 & Cr=20 {}
+opc: "" is Br=21 & Cr=21 {}
+opc: "" is Br=22 & Cr=22 {}
+opc: "" is Br=23 & Cr=23 {}
+opc: "" is Br=24 & Cr=24 {}
+opc: "" is Br=25 & Cr=25 {}
+opc: "" is Br=26 & Cr=26 {}
+opc: "" is Br=27 & Cr=27 {}
+opc: "" is Br=28 & Cr=28 {}
+opc: "" is Br=29 & Cr=29 {}
+opc: "" is Br=30 & Cr=30 {}
+opc: "" is Br=31 & Cr=31 {}
+opc: "" is Br=32 & Cr=32 {}
+opc: "" is Br=33 & Cr=33 {}
+opc: "" is Br=34 & Cr=34 {}
+opc: "" is Br=35 & Cr=35 {}
+opc: "" is Br=36 & Cr=36 {}
+opc: "" is Br=37 & Cr=37 {}
+opc: "" is Br=38 & Cr=38 {}
+opc: "" is Br=39 & Cr=39 {}
+opc: "" is Br=40 & Cr=40 {}
+opc: "" is Br=41 & Cr=41 {}
+opc: "" is Br=42 & Cr=42 {}
+opc: "" is Br=43 & Cr=43 {}
+opc: "" is Br=44 & Cr=44 {}
+opc: "" is Br=45 & Cr=45 {}
+opc: "" is Br=46 & Cr=46 {}
+opc: "" is Br=47 & Cr=47 {}
+opc: "" is Br=48 & Cr=48 {}
+opc: "" is Br=49 & Cr=49 {}
+opc: "" is Br=50 & Cr=50 {}
+opc: "" is Br=51 & Cr=51 {}
+opc: "" is Br=52 & Cr=52 {}
+opc: "" is Br=53 & Cr=53 {}
+opc: "" is Br=54 & Cr=54 {}
+opc: "" is Br=55 & Cr=55 {}
+opc: "" is Br=56 & Cr=56 {}
+opc: "" is Br=57 & Cr=57 {}
+opc: "" is Br=58 & Cr=58 {}
+opc: "" is Br=59 & Cr=59 {}
+opc: "" is Br=60 & Cr=60 {}
+opc: "" is Br=61 & Cr=61 {}
+opc: "" is Br=62 & Cr=62 {}
+opc: "" is Br=63 & Cr=63 {}
+opc: ","^srcC is srcC {}
+
+# Condition codes (Q). Short-immediate instructions cannot be conditional: D overlays Q, F, N.
+Qcc: "z"   is Q=0x01 { export Z; }
+Qcc: "nz"  is Q=0x02 { local t:1 = !Z; export t; }
+Qcc: "p"   is Q=0x03 { local t:1 = !N; export t; }
+Qcc: "n"   is Q=0x04 { export N; }
+Qcc: "c"   is Q=0x05 { export C; }
+Qcc: "nc"  is Q=0x06 { local t:1 = !C; export t; }
+Qcc: "v"   is Q=0x07 { export V; }
+Qcc: "nv"  is Q=0x08 { local t:1 = !V; export t; }
+Qcc: "gt"  is Q=0x09 { local t:1 = (N == V) && !Z; export t; }
+Qcc: "ge"  is Q=0x0a { local t:1 = (N == V); export t; }
+Qcc: "lt"  is Q=0x0b { local t:1 = (N != V); export t; }
+Qcc: "le"  is Q=0x0c { local t:1 = Z || (N != V); export t; }
+Qcc: "hi"  is Q=0x0d { local t:1 = !C && !Z; export t; }
+Qcc: "ls"  is Q=0x0e { local t:1 = C || Z; export t; }
+Qcc: "pnz" is Q=0x0f { local t:1 = !N && !Z; export t; }
+Qcc: "x10" is Q=0x10 { local t:1 = ext_condition(0x10:1); export t; }
+Qcc: "x11" is Q=0x11 { local t:1 = ext_condition(0x11:1); export t; }
+Qcc: "x12" is Q=0x12 { local t:1 = ext_condition(0x12:1); export t; }
+Qcc: "x13" is Q=0x13 { local t:1 = ext_condition(0x13:1); export t; }
+Qcc: "x14" is Q=0x14 { local t:1 = ext_condition(0x14:1); export t; }
+Qcc: "x15" is Q=0x15 { local t:1 = ext_condition(0x15:1); export t; }
+Qcc: "x16" is Q=0x16 { local t:1 = ext_condition(0x16:1); export t; }
+Qcc: "x17" is Q=0x17 { local t:1 = ext_condition(0x17:1); export t; }
+Qcc: "x18" is Q=0x18 { local t:1 = ext_condition(0x18:1); export t; }
+Qcc: "x19" is Q=0x19 { local t:1 = ext_condition(0x19:1); export t; }
+Qcc: "x1a" is Q=0x1a { local t:1 = ext_condition(0x1a:1); export t; }
+Qcc: "x1b" is Q=0x1b { local t:1 = ext_condition(0x1b:1); export t; }
+Qcc: "x1c" is Q=0x1c { local t:1 = ext_condition(0x1c:1); export t; }
+Qcc: "x1d" is Q=0x1d { local t:1 = ext_condition(0x1d:1); export t; }
+Qcc: "x1e" is Q=0x1e { local t:1 = ext_condition(0x1e:1); export t; }
+Qcc: "x1f" is Q=0x1f { local t:1 = ext_condition(0x1f:1); export t; }
+
+# Delay-slot field of ALU instructions (meaningless; shown as objdump does)
+ndx: ""    is Br=61 | Br=63 | Cr=61 | Cr=63 {}
+ndx: ""    is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb0=0)) & (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb0=0)) & (Nul=0 | Nul=3) {}
+ndx: ".d"  is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb0=0)) & (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb0=0)) & Nul=1 {}
+ndx: ".jd" is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb0=0)) & (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb0=0)) & Nul=2 {}
+
+# ---------------------------------------------------------------------------------------------
+# Flag helpers
+
+macro zn(res) {
+	Z = (res == 0);
+	N = (res s< 0);
 }
 
-macro exec_add(dst, op1, op2, fl) {
-	dst = op1 + op2;
-	if (!fl) goto inst_next;
-	CY = scarry(op1, op2);  # Check for signed carry
-	local dst_sign:1 = ((dst >> 31) & 1) != 0;
-	local op1_sign:1 = ((op1 >> 31) & 1) != 0;
-	local op2_sign:1 = ((op2 >> 31) & 1) != 0;
-	V = op1_sign == op2_sign && dst_sign != op1_sign;
-	resultflags(dst);
+macro addflags(a, b, res) {
+	zn(res);
+	C = carry(a, b);
+	V = scarry(a, b);
 }
 
-macro exec_sub(dst, op1, op2, fl) {
-	dst = op1 - op2;
-	if (!fl) goto inst_next;
-	CY = op1 s< op2;  # Check for signed borrow
-	local dst_sign:1 = ((dst >> 31) & 1) != 0;
-	local op1_sign:1 = ((op1 >> 31) & 1) != 0;
-	local op2_sign:1 = ((op2 >> 31) & 1) != 0;
-	V = op1_sign != op2_sign && dst_sign != op1_sign;
-	resultflags(dst);
+macro subflags(a, b, res) {
+	zn(res);
+	C = a < b;
+	V = sborrow(a, b);
 }
 
-macro exec_adc(dst, op1, op2, fl) {
-	local tmp:4 = op2 + zext(CY);
-	dst = op1 + tmp;
-	if (!fl) goto inst_next;
-	CY = scarry(op1, tmp);  # Check for signed carry
-	resultflags(dst);
+# STATUS register: Z N C V E2 E1 H in bits 31..25, PC[25:2] in bits 23..0
+macro getstatus(res, pcval) {
+	res = (zext(Z) << 31) | (zext(N) << 30) | (zext(C) << 29) | (zext(V) << 28) |
+		(zext(E2) << 27) | (zext(E1) << 26) | (zext(H) << 25) | ((pcval >> 2) & 0xffffff);
 }
 
-macro exec_sbc(dst, op1, op2, fl) {
-	local tmp:4 = op2 + zext(CY);
-	dst = op1 - tmp;
-	if (!fl) goto inst_next;
-	CY = op1 s< tmp;  # Check for signed borrow
-	resultflags(dst);
+# J.F: flags (not H) from bits 31..26 of the operand
+macro jflags(val) {
+	Z  = (val & 0x80000000) != 0;
+	N  = (val & 0x40000000) != 0;
+	C  = (val & 0x20000000) != 0;
+	V  = (val & 0x10000000) != 0;
+	E2 = (val & 0x08000000) != 0;
+	E1 = (val & 0x04000000) != 0;
 }
 
-macro jumpflags(val) {
-	Z  = (val & (1 << 31)) != 0;
-	NE = (val & (1 << 30)) != 0;
-	CY = (val & (1 << 29)) != 0;
-	V  = (val & (1 << 28)) != 0;
-	E2 = (val & (1 << 27)) != 0;
-	E1 = (val & (1 << 26)) != 0;
-}
-
-macro set_flags(val) {
-	Z  = (val & (1 << 6)) != 0;
-	NE = (val & (1 << 5)) != 0;
-	CY = (val & (1 << 4)) != 0;
-	V  = (val & (1 << 3)) != 0;
-	E2 = (val & (1 << 2)) != 0;
-	E1 = (val & (1 << 1)) != 0;
-
-	# Technically, if the "Halt" bit is set, then the other bits should be
-	# unaffected, but implementing this is difficult and would not be very
-	# useful.
-	H  = (val & (1 << 0)) != 0;
-}
-
-macro update_status() {
-	status =          (zext(Z  & 1) << 31);
-	status = status | (zext(NE & 1) << 30);
-	status = status | (zext(CY & 1) << 29);
-	status = status | (zext(V  & 1) << 28);
-	status = status | (zext(E1 & 1) << 27);
-	status = status | (zext(E2 & 1) << 26);
-	status = status | (zext(H  & 1) << 25);
-	status = status | ((inst_next >> 2) & 0xffffff);
-}
-
-macro link() {
-	update_status();
-	blink = status;
-}
-
-macro mulext(dst, op1, op2) {
-	local op1_ext:4 = sext(op1);
-	local op2_ext:4 = sext(op2);
-	dst = op1_ext * op2_ext;
-}
-
-macro rormultiple(dst, op1, op2) {
-	dst = op1 << (32 - op2);
-	dst = dst | (op1 >> op2);
-}
-
-macro roronce(dst, op1) {
-	rormultiple(dst, op1, 1);
-}
-
-macro rorflags(dst, op1) {
-	CY = (op1 & 1) != 0;
-	resultflags(dst);
-}
-
-macro swapwords(dst, op1) {
-	dst = op1 << 16;
-	dst = dst | (op1 >> 16);
-}
-
-macro ldext(dst, val, extend) {
-	dst = zext(val);
-	if (!extend) goto <skip>;
-	dst = sext(val);
-	<skip>
-}
-
-macro writeback(dst, addr, flag) {
-	if (!flag) goto <skip>;
-	dst = addr;
-	<skip>
-}
-
-
-dest: A is A { export A; }
-dest: 0 is A=61 | A=62 | A=63 { export dummy_write; }
-
-Qcc: "al"	is Q=0x00	{ export 1:1; }
-Qcc: "eq"	is Q=0x01	{ local tmp:1 = (Z!=0); export tmp; }
-Qcc: "ne"	is Q=0x02	{ local tmp:1 = (Z==0); export tmp; }
-Qcc: "pl"	is Q=0x03	{ local tmp:1 = (NE==0); export tmp; }
-Qcc: "mi"	is Q=0x04	{ local tmp:1 = (NE!=0); export tmp; }
-Qcc: "cs"	is Q=0x05	{ local tmp:1 = (CY!=0); export tmp; }
-Qcc: "cc"	is Q=0x06	{ local tmp:1 = (CY==0); export tmp; }
-Qcc: "vs"	is Q=0x07	{ local tmp:1 = (V!=0); export tmp; }
-Qcc: "vc"	is Q=0x08	{ local tmp:1 = (V==0); export tmp; }
-Qcc: "gt"	is Q=0x09	{ local tmp:1 = !Z && ((NE && V) || (!NE && !V)); export tmp; }
-Qcc: "ge"	is Q=0x0a	{ local tmp:1 = (NE && V) || (!NE && !V); export tmp; }
-Qcc: "lt"	is Q=0x0b	{ local tmp:1 = (NE && !V) || (!NE && V); export tmp; }
-Qcc: "le"	is Q=0x0c	{ local tmp:1 = Z || (NE && !V) || (!NE && V); export tmp; }
-Qcc: "hi"	is Q=0x0d	{ local tmp:1 = !CY && !Z; export tmp; }
-Qcc: "ls"	is Q=0x0e	{ local tmp:1 = CY || Z; export tmp; }
-Qcc: "pnz"	is Q=0x0f	{ local tmp:1 = !NE && !Z; export tmp; }
-
-cc:         is Q=0x00 {}
-cc: "."Qcc  is Q & Qcc { if (!Qcc) goto inst_next; }
-cj:         is Q=0x00 {}
-cj:    Qcc  is Q & Qcc {}  # Handle conditional jumps in the Ndd table.
-
-Ndd: "nd"  is N=0b00 & Qcc { if (!Qcc) goto inst_next; }  # Only execute the next instruction when not jumping.
-Ndd: "d"   is N=0b01 & Qcc { delayslot(1); if (!Qcc) goto inst_next; }  # Always execute the next instruction.
-Ndd: "jd"  is N=0b10 & Qcc { if (!Qcc) goto inst_next; delayslot(1); }  # Only execute the next instruction when jumping.
-
-dd:         is N=0b00 & Ndd {}
-dd: "."Ndd  is N      & Ndd {}
-
-Ndl: "nd"  is N=0b00 & L & Qcc { local jump_dest:4 = inst_next + (L << 2); if (Qcc) goto <skip>; goto [jump_dest]; <skip> }  # Only execute the next instruction when not jumping.
-Ndl: "d"   is N=0b01 & L & Qcc { local jump_dest:4 = inst_next + (L << 2); delayslot(1); if (Qcc) goto <skip>; goto [jump_dest]; <skip> }  # Always execute the next instruction.
-Ndl: "jd"  is N=0b10 & L & Qcc { local jump_dest:4 = inst_next + (L << 2); if (Qcc) goto <skip>; goto [jump_dest]; <skip> delayslot(1); }  # Only execute the next instruction when jumping.
-
-dl:         is N=0b00 & Ndl {}
-dl: "."Ndl  is N      & Ndl {}
-
-f:       is F=0 { export 0:1; }
-f: ".f"  is F=1 { export 1:1; }
-fi:       is B=63 | C=63 { export 0:1; }
-fi: ".f"  is B=61 | C=61 { export 1:1; }
-
-# ST flags
-st_di:        is st_Di=0 {}
-st_di: ".di"  is st_Di=1 {}
-st_a:         is st_A=0 { export 0:1; }
-st_a:  ".a"   is st_A=1 { export 1:1; }
-
-# LD, generic flags
-ldg_di:        is ldg_Di=0 {}
-ldg_di: ".di"  is ldg_Di=1 {}
-ldg_a:         is ldg_A=0 { export 0:1; }
-ldg_a:  ".a"   is ldg_A=1 { export 1:1; }
-ldg_x:         is ldg_X=0 { export 0:1; }
-ldg_x:  ".x"   is ldg_X=1 { export 1:1; }
-
-# LD, simm flags
-lds_di:        is lds_Di=0 {}
-lds_di: ".di"  is lds_Di=1 {}
-lds_a:         is lds_A=0 { export 0:1; }
-lds_a:  ".a"   is lds_A=1 { export 1:1; }
-lds_x:         is lds_X=0 { export 0:1; }
-lds_x:  ".x"   is lds_X=1 { export 1:1; }
-
+# ---------------------------------------------------------------------------------------------
+# Zero-overhead loop: the instruction at LP_END (marked through the loopEnd context by "lp")
+# first branches back to LP_START while LP_COUNT (24 bits) has not reached 0.
+lpstart: addr is loopStart [ addr = loopStart << 2; ] { export *[ram]:4 addr; }
 
 :^instruction is phase=0 & instruction [ phase = 1; ] {
 	build instruction;
 }
-
-:^instruction is phase=0 & end_of_loop=1 & instruction [ phase = 1; ] {
-	if (loop_enable == 0) goto <end_loop>;
-	lp_count = lp_count - 1;
+:^instruction is phase=0 & loopEnd=1 & lpstart & instruction [ phase = 1; ] {
+	if (is_in_loop == 0) goto <end_loop>;
+	lp_count = (lp_count - 1) & 0xffffff;
 	if (lp_count == 0) goto <end_loop>;
-	pc = lp_start;
-	goto [pc];
-	<end_loop>
-	loop_enable = 0;
+	goto lpstart;
+<end_loop>
+	is_in_loop = 0;
 	build instruction;
 }
 
-with: phase=1 {
+with : phase=1 {
 
+# Branch targets: PC + 4 + 4*L, within the 26-bit program counter
+reltarget: addr is L [ addr = (inst_next + L * 4) & 0x3ffffff; ] { export *[ram]:4 addr; }
+# Address of the instruction after the delay slot (nullified delay slot)
+skipnext: addr is epsilon [ addr = inst_next2; ] { export *[ram]:4 addr; }
+link2: addr is epsilon [ addr = inst_next2; ] { export *[const]:4 addr; }
 
-:nop  is I=0b01111 & A=63 & B=63 & C=63 & D=0x1ff {}
+# ---------------------------------------------------------------------------------------------
+# Operands of the generated instructions (ARC32_ops.sinc)
 
-:brk    is I=0b00011 & A=63 & B=63 & C=63 & D=0x000 { DebugBreak(); }
-:sleep  is I=0b00011 & A=63 & B=63 & C=63 & D=0x001 { ProcessorSleep(); }
-:swi    is I=0b00011 & A=63 & B=63 & C=63 & D=0x002 { SoftwareInterrupt(); }
+# User extension instructions (0x16-0x1d)
+extmaj: "ext16" is I=0x16 { export 0x16:1; } extmaj: "ext17" is I=0x17 { export 0x17:1; } extmaj: "ext18" is I=0x18 { export 0x18:1; }
+extmaj: "ext19" is I=0x19 { export 0x19:1; } extmaj: "ext1a" is I=0x1a { export 0x1a:1; } extmaj: "ext1b" is I=0x1b { export 0x1b:1; }
+extmaj: "ext1c" is I=0x1c { export 0x1c:1; } extmaj: "ext1d" is I=0x1d { export 0x1d:1; }
 
-:j^cj^dd^f #jump_dest  is I=0b00111 & A=0 & B=62 & C=0 & f & dd & cj ; Limm [ jump_dest = (Limm & 0xffffff) << 2; ] { if (!f) goto <skip>; jumpflags(Limm:4); <skip> goto [jump_dest:4]; }
-:j^cj^dd^f [B]         is I=0b00111 & A=0 & B & B=31 & C=0 & f & dd & cj { if (!f) goto <skip>; jumpflags(B); <skip> return [(B & 0xffffff) << 2]; }
-:j^cj^dd^f [B]         is I=0b00111 & A=0 & B & C=0 & f & dd & cj { if (!f) goto <skip>; jumpflags(B); <skip> goto [(B & 0xffffff) << 2]; }
+# Source of a single-operand instruction (the C field holds the sub-opcode)
+src1: B     is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb1=0 & Bb0=0)) & B          { export B; }
+src1: D     is (Br=61 | Br=63) & D { export *[const]:4 D; }
+src1: limm  is Br=62; limm        { export *[const]:4 limm; }
+nd1: ""    is Br=61 | Br=63 {}
+nd1: ""    is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb0=0)) & (Nul=0 | Nul=3) {}
+nd1: ".d"  is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb0=0)) & Nul=1 {}
+nd1: ".jd" is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb0=0)) & Nul=2 {}
 
-:jl^cj^dd^f #jump_dest  is I=0b00111 & A=0 & B=62 & C=1 & f & dd & cj ; Limm [ jump_dest = (Limm & 0xffffff) << 2; ] { link(); if (!f) goto <skip>; jumpflags(Limm:4); <skip> goto [jump_dest:4]; }
-:jl^cj^dd^f [B]         is I=0b00111 & A=0 & B & B=31 & C=1 & f & dd & cj { link(); if (!f) goto <skip>; jumpflags(B); <skip> return [(B & 0xffffff) << 2]; }
-:jl^cj^dd^f [B]         is I=0b00111 & A=0 & B & C=1 & f & dd & cj { link(); if (!f) goto <skip>; jumpflags(B); <skip> goto [(B & 0xffffff) << 2]; }
-
-:b^cj^dd #jump_dest  is I=0b00100 & L & dd & cj [ jump_dest = inst_next + (L << 2); ] { goto [jump_dest:4]; }
-:bl^cj^dd #jump_dest  is I=0b00101 & L & dd & cj [ jump_dest = inst_next + (L << 2); ] { link(); call [jump_dest:4]; }
-
-:lp^cj^dl #jump_dest  is I=0b00110 & L & dl & cj [
-	jump_dest = inst_next + (L << 2);
-	end_of_loop = 1;
-	globalset(jump_dest, end_of_loop);
-] {
-	lp_start = inst_next;
-	lp_end = jump_dest;
-	loop_enable = 1;
+# FLAG: Z N C V E2 E1 H from bits 6..0 of the operand; when H is set the other flags are kept
+macro setflags(val) {
+	local v:4 = val;
+	local h:1 = (v & 1) != 0;
+	Z  = (h && Z) || (!h && ((v & 0x40) != 0));
+	N  = (h && N) || (!h && ((v & 0x20) != 0));
+	C  = (h && C) || (!h && ((v & 0x10) != 0));
+	V  = (h && V) || (!h && ((v & 0x08) != 0));
+	E2 = (h && E2) || (!h && ((v & 0x04) != 0));
+	E1 = (h && E1) || (!h && ((v & 0x02) != 0));
+	H  = h;
 }
 
-:adc^fi   dest, #D, #D2   is I=0b01001 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { exec_adc(dest, D:4, D2:4, fi); }
-:adc^fi   dest, B, #D     is I=0b01001 & dest & B & (C=61 | C=63) & fi & D { exec_adc(dest, B, D:4, fi); }
-:adc^fi   dest, #D, C     is I=0b01001 & dest & (B=61 | B=63) & C & fi & D { exec_adc(dest, D:4, C, fi); }
-:adc^cc^f dest, B, #Limm  is I=0b01001 & dest & B & C=62 & f & cc ; Limm { exec_adc(dest, B, Limm:4, f); }
-:adc^cc^f dest, #Limm, C  is I=0b01001 & dest & B=62 & C & f & cc ; Limm { exec_adc(dest, Limm:4, C, f); }
-:adc^cc^f dest, B, C      is I=0b01001 & dest & B & C & f & cc { exec_adc(dest, B, C, f); }
-
-:add^fi   dest, #D, #D2   is I=0b01000 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { exec_add(dest, D:4, D2:4, fi); }
-:add^fi   dest, B, #D     is I=0b01000 & dest & B & (C=61 | C=63) & fi & D { exec_add(dest, B, D:4, fi); }
-:add^fi   dest, #D, C     is I=0b01000 & dest & (B=61 | B=63) & C & fi & D { exec_add(dest, D:4, C, fi); }
-:add^cc^f dest, B, #Limm  is I=0b01000 & dest & B & C=62 & f & cc ; Limm { exec_add(dest, B, Limm:4, f); }
-:add^cc^f dest, #Limm, C  is I=0b01000 & dest & B=62 & C & f & cc ; Limm { exec_add(dest, Limm:4, C, f); }
-:add^cc^f dest, B, C      is I=0b01000 & dest & B & C & f & cc { exec_add(dest, B, C, f); }
-
-:mov^fi   dest, #D        is I=0b01100 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D { dest = D; }
-:mov^cc^f dest, #Limm     is I=0b01100 & dest & B=62 & C=62 & f & cc ; Limm { dest = Limm; }
-
-# The "(B=61 | B=63) & (C=61 | C=63)" case is handled by "mov", above.
-:and^fi   dest, B, #D     is I=0b01100 & dest & B & (C=61 | C=63) & fi & D { dest = B & D; if (!fi) goto inst_next; resultflags(dest); }
-:and^fi   dest, #D, C     is I=0b01100 & dest & (B=61 | B=63) & C & fi & D { dest = D & C; if (!fi) goto inst_next; resultflags(dest); }
-:and^cc^f dest, B, #Limm  is I=0b01100 & dest & B & C=62 & f & cc ; Limm { dest = B & Limm; if (!f) goto inst_next; resultflags(dest); }
-:and^cc^f dest, #Limm, C  is I=0b01100 & dest & B=62 & C & f & cc ; Limm { dest = Limm & C; if (!f) goto inst_next; resultflags(dest); }
-:and^cc^f dest, B, C      is I=0b01100 & dest & B & C & f & cc { dest = B & C; if (!f) goto inst_next; resultflags(dest); }
-
-:asl^fi   dest, #D, #D2   is I=0b10000 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { dest = D << D2; if (!fi) goto inst_next; resultflags(dest); }
-:asl^fi   dest, B, #D     is I=0b10000 & dest & B & (C=61 | C=63) & fi & D { dest = B << D; if (!fi) goto inst_next; resultflags(dest); }
-:asl^fi   dest, #D, C     is I=0b10000 & dest & (B=61 | B=63) & C & fi & D { dest = D << C; if (!fi) goto inst_next; resultflags(dest); }
-:asl^cc^f dest, B, #Limm  is I=0b10000 & dest & B & C=62 & f & cc ; Limm { dest = B << Limm; if (!f) goto inst_next; resultflags(dest); }
-:asl^cc^f dest, #Limm, C  is I=0b10000 & dest & B=62 & C & f & cc ; Limm { dest = Limm << C; if (!f) goto inst_next; resultflags(dest); }
-:asl^cc^f dest, B, C      is I=0b10000 & dest & B & C & f & cc { dest = B << C; if (!f) goto inst_next; resultflags(dest); }
-
-:asr^fi   dest, #D, #D2   is I=0b10010 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { dest = D s>> D2; if (!fi) goto inst_next; resultflags(dest); }
-:asr^fi   dest, B, #D     is I=0b10010 & dest & B & (C=61 | C=63) & fi & D { dest = B s>> D; if (!fi) goto inst_next; resultflags(dest); }
-:asr^fi   dest, #D, C     is I=0b10010 & dest & (B=61 | B=63) & C & fi & D { dest = D s>> C; if (!fi) goto inst_next; resultflags(dest); }
-:asr^cc^f dest, B, #Limm  is I=0b10010 & dest & B & C=62 & f & cc ; Limm { dest = B s>> Limm; if (!f) goto inst_next; resultflags(dest); }
-:asr^cc^f dest, #Limm, C  is I=0b10010 & dest & B=62 & C & f & cc ; Limm { dest = Limm s>> C; if (!f) goto inst_next; resultflags(dest); }
-:asr^cc^f dest, B, C      is I=0b10010 & dest & B & C & f & cc { dest = B s>> C; if (!f) goto inst_next; resultflags(dest); }
-
-:bic^fi   dest, #D, #D2   is I=0b01110 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { dest = D & ~D2; if (!fi) goto inst_next; resultflags(dest); }
-:bic^fi   dest, B, #D     is I=0b01110 & dest & B & (C=61 | C=63) & fi & D { dest = B & ~D; if (!fi) goto inst_next; resultflags(dest); }
-:bic^fi   dest, #D, C     is I=0b01110 & dest & (B=61 | B=63) & C & fi & D { dest = D & ~C; if (!fi) goto inst_next; resultflags(dest); }
-:bic^cc^f dest, B, #Limm  is I=0b01110 & dest & B & C=62 & f & cc ; Limm { dest = B & ~Limm; if (!f) goto inst_next; resultflags(dest); }
-:bic^cc^f dest, #Limm, C  is I=0b01110 & dest & B=62 & C & f & cc ; Limm { dest = Limm & ~C; if (!f) goto inst_next; resultflags(dest); }
-:bic^cc^f dest, B, C      is I=0b01110 & dest & B & C & f & cc { dest = B & ~C; if (!f) goto inst_next; resultflags(dest); }
-
-:lsr^fi   dest, #D, #D2   is I=0b10001 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { dest = D >> D2; if (!fi) goto inst_next; resultflags(dest); }
-:lsr^fi   dest, B, #D     is I=0b10001 & dest & B & (C=61 | C=63) & fi & D { dest = B >> D; if (!fi) goto inst_next; resultflags(dest); }
-:lsr^fi   dest, #D, C     is I=0b10001 & dest & (B=61 | B=63) & C & fi & D { dest = D >> C; if (!fi) goto inst_next; resultflags(dest); }
-:lsr^cc^f dest, B, #Limm  is I=0b10001 & dest & B & C=62 & f & cc ; Limm { dest = B >> Limm; if (!f) goto inst_next; resultflags(dest); }
-:lsr^cc^f dest, #Limm, C  is I=0b10001 & dest & B=62 & C & f & cc ; Limm { dest = Limm >> C; if (!f) goto inst_next; resultflags(dest); }
-:lsr^cc^f dest, B, C      is I=0b10001 & dest & B & C & f & cc { dest = B >> C; if (!f) goto inst_next; resultflags(dest); }
-
-# TODO: Implement MAX instruction.
-
-# TODO: Implement MIN instruction.
-
-# FIXME: Semantics are guessed--confirm with old GCC sources.
-:mul16^fi   dest, #D, #D2   is I=0b10110 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { mulext(dest, D:2, D2:2); if (!fi) goto inst_next; resultflags(dest); }
-:mul16^fi   dest, B, #D     is I=0b10110 & dest & B & (C=61 | C=63) & fi & D { mulext(dest, B:2, D:2); if (!fi) goto inst_next; resultflags(dest); }
-:mul16^fi   dest, #D, C     is I=0b10110 & dest & (B=61 | B=63) & C & fi & D { mulext(dest, D:2, C:2); if (!fi) goto inst_next; resultflags(dest); }
-:mul16^cc^f dest, B, #Limm  is I=0b10110 & dest & B & C=62 & f & cc ; Limm { mulext(dest, B:2, Limm:2); if (!f) goto inst_next; resultflags(dest); }
-:mul16^cc^f dest, #Limm, C  is I=0b10110 & dest & B=62 & C & f & cc ; Limm { mulext(dest, Limm:2, C:2); if (!f) goto inst_next; resultflags(dest); }
-:mul16^cc^f dest, B, C      is I=0b10110 & dest & B & C & f & cc { mulext(dest, B:2, C:2); if (!f) goto inst_next; resultflags(dest); }
-
-:or^fi   dest, #D, #D2   is I=0b01101 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { dest = D | D2; if (!fi) goto inst_next; resultflags(dest); }
-:or^fi   dest, B, #D     is I=0b01101 & dest & B & (C=61 | C=63) & fi & D { dest = B | D; if (!fi) goto inst_next; resultflags(dest); }
-:or^fi   dest, #D, C     is I=0b01101 & dest & (B=61 | B=63) & C & fi & D { dest = D | C; if (!fi) goto inst_next; resultflags(dest); }
-:or^cc^f dest, B, #Limm  is I=0b01101 & dest & B & C=62 & f & cc ; Limm { dest = B | Limm; if (!f) goto inst_next; resultflags(dest); }
-:or^cc^f dest, #Limm, C  is I=0b01101 & dest & B=62 & C & f & cc ; Limm { dest = Limm | C; if (!f) goto inst_next; resultflags(dest); }
-:or^cc^f dest, B, C      is I=0b01101 & dest & B & C & f & cc { dest = B | C; if (!f) goto inst_next; resultflags(dest); }
-
-:ror^fi   dest, #D, #D2   is I=0b10011 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { rormultiple(dest, D:4, D2:4); if (!fi) goto inst_next; resultflags(dest); }
-:ror^fi   dest, B, #D     is I=0b10011 & dest & B & (C=61 | C=63) & fi & D { rormultiple(dest, B, D:4); if (!fi) goto inst_next; resultflags(dest); }
-:ror^fi   dest, #D, C     is I=0b10011 & dest & (B=61 | B=63) & C & fi & D { rormultiple(dest, D:4, C); if (!fi) goto inst_next; resultflags(dest); }
-:ror^cc^f dest, B, #Limm  is I=0b10011 & dest & B & C=62 & f & cc ; Limm { rormultiple(dest, B, Limm:4); if (!f) goto inst_next; resultflags(dest); }
-:ror^cc^f dest, #Limm, C  is I=0b10011 & dest & B=62 & C & f & cc ; Limm { rormultiple(dest, Limm:4, C); if (!f) goto inst_next; resultflags(dest); }
-:ror^cc^f dest, B, C      is I=0b10011 & dest & B & C & f & cc { rormultiple(dest, B, C); if (!f) goto inst_next; resultflags(dest); }
-
-:sbc^fi   dest, #D, #D2   is I=0b01011 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { exec_sbc(dest, D:4, D2:4, fi); }
-:sbc^fi   dest, B, #D     is I=0b01011 & dest & B & (C=61 | C=63) & fi & D { exec_sbc(dest, B, D:4, fi); }
-:sbc^fi   dest, #D, C     is I=0b01011 & dest & (B=61 | B=63) & C & fi & D { exec_sbc(dest, D:4, C, fi); }
-:sbc^cc^f dest, B, #Limm  is I=0b01011 & dest & B & C=62 & f & cc ; Limm { exec_sbc(dest, B, Limm:4, f); }
-:sbc^cc^f dest, #Limm, C  is I=0b01011 & dest & B=62 & C & f & cc ; Limm { exec_sbc(dest, Limm:4, C, f); }
-:sbc^cc^f dest, B, C      is I=0b01011 & dest & B & C & f & cc { exec_sbc(dest, B, C, f); }
-
-:sub^fi   dest, #D, #D2   is I=0b01010 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { exec_sub(dest, D:4, D2:4, fi); }
-:sub^fi   dest, B, #D     is I=0b01010 & dest & B & (C=61 | C=63) & fi & D { exec_sub(dest, B, D:4, fi); }
-:sub^fi   dest, #D, C     is I=0b01010 & dest & (B=61 | B=63) & C & fi & D { exec_sub(dest, D:4, C, fi); }
-:sub^cc^f dest, B, #Limm  is I=0b01010 & dest & B & C=62 & f & cc ; Limm { exec_sub(dest, B, Limm:4, f); }
-:sub^cc^f dest, #Limm, C  is I=0b01010 & dest & B=62 & C & f & cc ; Limm { exec_sub(dest, Limm:4, C, f); }
-:sub^cc^f dest, B, C      is I=0b01010 & dest & B & C & f & cc { exec_sub(dest, B, C, f); }
-
-:xor^fi   dest, #D, #D2   is I=0b01111 & dest & (B=61 | B=63) & (C=61 | C=63) & fi & D & D2 { dest = D ^ D2; if (!fi) goto inst_next; resultflags(dest); }
-:xor^fi   dest, B, #D     is I=0b01111 & dest & B & (C=61 | C=63) & fi & D { dest = B ^ D; if (!fi) goto inst_next; resultflags(dest); }
-:xor^fi   dest, #D, C     is I=0b01111 & dest & (B=61 | B=63) & C & fi & D { dest = D ^ C; if (!fi) goto inst_next; resultflags(dest); }
-:xor^cc^f dest, B, #Limm  is I=0b01111 & dest & B & C=62 & f & cc ; Limm { dest = B ^ Limm; if (!f) goto inst_next; resultflags(dest); }
-:xor^cc^f dest, #Limm, C  is I=0b01111 & dest & B=62 & C & f & cc ; Limm { dest = Limm ^ C; if (!f) goto inst_next; resultflags(dest); }
-:xor^cc^f dest, B, C      is I=0b01111 & dest & B & C & f & cc { dest = B ^ C; if (!f) goto inst_next; resultflags(dest); }
-
-:asr^fi   dest, #D     is I=0b00011 & dest & (B=61 | B=63) & C=1 & fi & D { dest = D s>> 1; if (!fi) goto inst_next; rorflags(dest, D:4); }
-:asr^cc^f dest, #Limm  is I=0b00011 & dest & B=62 & C=1 & f & cc ; Limm { dest = Limm s>> 1; if (!f) goto inst_next; rorflags(dest, Limm:4); }
-:asr^cc^f dest, B      is I=0b00011 & dest & B & C=1 & f & cc { dest = B s>> 1; if (!f) goto inst_next; rorflags(dest, B); }
-
-:extb^fi   dest, #D     is I=0b00011 & dest & (B=61 | B=63) & C=7 & fi & D { dest = zext(D:1); if (!fi) goto inst_next; resultflags(dest); }
-:extb^cc^f dest, #Limm  is I=0b00011 & dest & B=62 & C=7 & f & cc ; Limm { dest = zext(Limm:1); if (!f) goto inst_next; resultflags(dest); }
-:extb^cc^f dest, B      is I=0b00011 & dest & B & C=7 & f & cc { dest = zext(B:1); if (!f) goto inst_next; resultflags(dest); }
-:extw^fi   dest, #D     is I=0b00011 & dest & (B=61 | B=63) & C=8 & fi & D { dest = zext(D:2); if (!fi) goto inst_next; resultflags(dest); }
-:extw^cc^f dest, #Limm  is I=0b00011 & dest & B=62 & C=8 & f & cc ; Limm { dest = zext(Limm:2); if (!f) goto inst_next; resultflags(dest); }
-:extw^cc^f dest, B      is I=0b00011 & dest & B & C=8 & f & cc { dest = zext(B:2); if (!f) goto inst_next; resultflags(dest); }
-
-:flag    #D     is I=0b00011 & A=61 & B=63 & C=0 & D               { set_flags(D:4); }
-:flag^cc #Limm  is I=0b00011 & A=61 & B=62 & C=0 & F=0 & cc ; Limm { set_flags(Limm:4); }
-:flag^cc B      is I=0b00011 & A=61 & B    & C=0 & F=0 & cc        { set_flags(B); }
-
-:lsr^fi   dest, #D     is I=0b00011 & dest & (B=61 | B=63) & C=2 & fi & D { dest = D >> 1; if (!fi) goto inst_next; rorflags(dest, D:4); }
-:lsr^cc^f dest, #Limm  is I=0b00011 & dest & B=62 & C=2 & f & cc ; Limm { dest = Limm >> 1; if (!f) goto inst_next; rorflags(dest, Limm:4); }
-:lsr^cc^f dest, B      is I=0b00011 & dest & B & C=2 & f & cc { dest = B >> 1; if (!f) goto inst_next; rorflags(dest, B); }
-
-# TODO: Implement NORM instruction.
-
-:ror^fi   dest, #D     is I=0b00011 & dest & (B=61 | B=63) & C=3 & fi & D { roronce(dest, D); if (!fi) goto inst_next; rorflags(dest, D:4); }
-:ror^cc^f dest, #Limm  is I=0b00011 & dest & B=62 & C=3 & f & cc ; Limm { roronce(dest, Limm); if (!f) goto inst_next; rorflags(dest, Limm:4); }
-:ror^cc^f dest, B      is I=0b00011 & dest & B & C=3 & f & cc { roronce(dest, B); if (!f) goto inst_next; rorflags(dest, B); }
-
-:sexb^fi   dest, #D     is I=0b00011 & dest & (B=61 | B=63) & C=5 & fi & D { dest = sext(D:1); if (!fi) goto inst_next; resultflags(dest); }
-:sexb^cc^f dest, #Limm  is I=0b00011 & dest & B=62 & C=5 & f & cc ; Limm { dest = sext(Limm:1); if (!f) goto inst_next; resultflags(dest); }
-:sexb^cc^f dest, B      is I=0b00011 & dest & B & C=5 & f & cc { dest = sext(B:1); if (!f) goto inst_next; resultflags(dest); }
-:sexw^fi   dest, #D     is I=0b00011 & dest & (B=61 | B=63) & C=6 & fi & D { dest = sext(D:2); if (!fi) goto inst_next; resultflags(dest); }
-:sexw^cc^f dest, #Limm  is I=0b00011 & dest & B=62 & C=6 & f & cc ; Limm { dest = sext(Limm:2); if (!f) goto inst_next; resultflags(dest); }
-:sexw^cc^f dest, B      is I=0b00011 & dest & B & C=6 & f & cc { dest = sext(B:2); if (!f) goto inst_next; resultflags(dest); }
-
-:swap^fi   dest, #D     is I=0b00011 & dest & (B=61 | B=63) & C=9 & fi & D { swapwords(dest, D); if (!fi) goto inst_next; resultflags(dest); }
-:swap^cc^f dest, #Limm  is I=0b00011 & dest & B=62 & C=9 & f & cc ; Limm { swapwords(dest, Limm); if (!f) goto inst_next; resultflags(dest); }
-:swap^cc^f dest, B      is I=0b00011 & dest & B & C=9 & f & cc { swapwords(dest, B); if (!f) goto inst_next; resultflags(dest); }
-
-:st^st_a^st_di #C_D, [#B_D, #D]   is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b00 & st_21=0 & B=63 & C=63 & D [ B_D = D + 0; C_D = D + 0; ] { *[ram]:4 (D:4 + D) = D; }
-:st^st_a^st_di #Limm, [#B_D, #D]  is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b00 & st_21=0 & B=63 & C=62 & D ; Limm [ B_D = D + 0; ] { *[ram]:4 (D:4 + D) = Limm; }
-:st^st_a^st_di #C_D, [#Limm, #D]  is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b00 & st_21=0 & B=62 & C=63 & D ; Limm [ C_D = D + 0; ] { *[ram]:4 (Limm:4 + D) = D; }
-:st^st_a^st_di C, [#B_D, #D]      is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b00 & st_21=0 & B=63 & C & D [ B_D = D + 0; ] { *[ram]:4 (D:4 + D) = C; }
-:st^st_a^st_di C, [#Limm, #D]     is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b00 & st_21=0 & B=62 & C & D ; Limm { *[ram]:4 (Limm:4 + D) = C; }
-:st^st_a^st_di #C_D, [B, #D]      is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b00 & st_21=0 & B & C=63 & D [ C_D = D + 0; ] { *[ram]:4 (B + D) = D; writeback(B, B + D, st_a); }
-:st^st_a^st_di #Limm, [B, #D]     is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b00 & st_21=0 & B & C=62 & D ; Limm { *[ram]:4 (B + D) = Limm; writeback(B, B + D, st_a); }
-:st^st_a^st_di C, [B, #D]         is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b00 & st_21=0 & B & C & D { *[ram]:4 (B + D) = C; writeback(B, B + D, st_a); }
-
-:stb^st_a^st_di #C_D, [#B_D, #D]   is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b01 & st_21=0 & B=63 & C=63 & D [ B_D = D + 0; C_D = D + 0; ] { *[ram]:1 (D:4 + D) = D; }
-:stb^st_a^st_di #Limm, [#B_D, #D]  is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b01 & st_21=0 & B=63 & C=62 & D ; Limm [ B_D = D + 0; ] { *[ram]:1 (D:4 + D) = Limm; }
-:stb^st_a^st_di #C_D, [#Limm, #D]  is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b01 & st_21=0 & B=62 & C=63 & D ; Limm [ C_D = D + 0; ] { *[ram]:1 (Limm:4 + D) = D; }
-:stb^st_a^st_di C, [#B_D, #D]      is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b01 & st_21=0 & B=63 & C & D [ B_D = D + 0; ] { *[ram]:1 (D:4 + D) = C; }
-:stb^st_a^st_di C, [#Limm, #D]     is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b01 & st_21=0 & B=62 & C & D ; Limm { *[ram]:1 (Limm:4 + D) = C; }
-:stb^st_a^st_di #C_D, [B, #D]      is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b01 & st_21=0 & B & C=63 & D [ C_D = D + 0; ] { *[ram]:1 (B + D) = D; writeback(B, B + D, st_a); }
-:stb^st_a^st_di #Limm, [B, #D]     is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b01 & st_21=0 & B & C=62 & D ; Limm { *[ram]:1 (B + D) = Limm; writeback(B, B + D, st_a); }
-:stb^st_a^st_di C, [B, #D]         is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b01 & st_21=0 & B & C & D { *[ram]:1 (B + D) = C; writeback(B, B + D, st_a); }
-
-:stw^st_a^st_di #C_D, [#B_D, #D]   is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b10 & st_21=0 & B=63 & C=63 & D [ B_D = D + 0; C_D = D + 0; ] { *[ram]:2 (D:4 + D) = D; }
-:stw^st_a^st_di #Limm, [#B_D, #D]  is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b10 & st_21=0 & B=63 & C=62 & D ; Limm [ B_D = D + 0; ] { *[ram]:2 (D:4 + D) = Limm; }
-:stw^st_a^st_di #C_D, [#Limm, #D]  is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b10 & st_21=0 & B=62 & C=63 & D ; Limm [ C_D = D + 0; ] { *[ram]:2 (Limm:4 + D) = D; }
-:stw^st_a^st_di C, [#B_D, #D]      is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b10 & st_21=0 & B=63 & C & D [ B_D = D + 0; ] { *[ram]:2 (D:4 + D) = C; }
-:stw^st_a^st_di C, [#Limm, #D]     is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b10 & st_21=0 & B=62 & C & D ; Limm { *[ram]:2 (Limm:4 + D) = C; }
-:stw^st_a^st_di #C_D, [B, #D]      is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b10 & st_21=0 & B & C=63 & D [ C_D = D + 0; ] { *[ram]:2 (B + D) = D; writeback(B, B + D, st_a); }
-:stw^st_a^st_di #Limm, [B, #D]     is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b10 & st_21=0 & B & C=62 & D ; Limm { *[ram]:2 (B + D) = Limm; writeback(B, B + D, st_a); }
-:stw^st_a^st_di C, [B, #D]         is I=0b00010 & st_di & st_25=0 & st_a & st_Z=0b10 & st_21=0 & B & C & D { *[ram]:2 (B + D) = C; writeback(B, B + D, st_a); }
-
-:sr #Limm, [ar_D]  is I=0b00010 & st_Di=0 & st_25=1 & st_A=0 & st_Z=0b00 & st_21=0 & B=63 & C=62 & ar_D ; Limm { ar_D = Limm; }
-:sr D, [#Limm]     is I=0b00010 & st_Di=0 & st_25=1 & st_A=0 & st_Z=0b00 & st_21=0 & B=62 & C=63 & D ; Limm { *[ram]:4 (Limm:4) = D; }
-:sr C, [ar_D]      is I=0b00010 & st_Di=0 & st_25=1 & st_A=0 & st_Z=0b00 & st_21=0 & B=63 & C & ar_D { ar_D = C; }
-:sr C, [#Limm]     is I=0b00010 & st_Di=0 & st_25=1 & st_A=0 & st_Z=0b00 & st_21=0 & B=62 & C ; Limm { *[ram]:4 (Limm:4) = C; }
-:sr D, [B]         is I=0b00010 & st_Di=0 & st_25=1 & st_A=0 & st_Z=0b00 & st_21=0 & B & C=63 & D { *[ram]:4 (B) = D; }
-:sr #Limm, [B]     is I=0b00010 & st_Di=0 & st_25=1 & st_A=0 & st_Z=0b00 & st_21=0 & B & C=62 ; Limm { *[ram]:4 (B) = Limm; }
-:sr C, [B]         is I=0b00010 & st_Di=0 & st_25=1 & st_A=0 & st_Z=0b00 & st_21=0 & B & C { *[ram]:4 (B) = C; }
-
-:ld^ldg_x^ldg_a^ldg_di  dest, [B, #Limm]  is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b00 & ldg_x & dest & B & C=62 ; Limm { dest = *[ram]:4 (B + Limm); }
-:ld^ldg_x^ldg_a^ldg_di  dest, [#Limm, C]  is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b00 & ldg_x & dest & B=62 & C ; Limm { dest = *[ram]:4 (Limm + C); }
-:ld^ldg_x^ldg_a^ldg_di  dest, [B, C]      is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b00 & ldg_x & dest & B & C { local old_B:4 = B; writeback(B, old_B + C, ldg_a); dest = *[ram]:4 (old_B + C); }
-
-:ldb^ldg_x^ldg_a^ldg_di  dest, [B, #Limm]  is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b01 & ldg_x & dest & B & C=62 ; Limm { ldext(dest, *[ram]:1 (B + Limm), ldg_x); }
-:ldb^ldg_x^ldg_a^ldg_di  dest, [#Limm, C]  is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b01 & ldg_x & dest & B=62 & C ; Limm { ldext(dest, *[ram]:1 (Limm + C), ldg_x); }
-:ldb^ldg_x^ldg_a^ldg_di  dest, [B, C]      is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b01 & ldg_x & dest & B & C { local old_B:4 = B; writeback(B, old_B + C, ldg_a); ldext(dest, *[ram]:1 (old_B + C), ldg_x); }
-
-:ldw^ldg_x^ldg_a^ldg_di  dest, [B, #Limm]  is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b10 & ldg_x & dest & B & C=62 ; Limm { ldext(dest, *[ram]:2 (B + Limm), ldg_x); }
-:ldw^ldg_x^ldg_a^ldg_di  dest, [#Limm, C]  is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b10 & ldg_x & dest & B=62 & C ; Limm { ldext(dest, *[ram]:2 (Limm + C), ldg_x); }
-:ldw^ldg_x^ldg_a^ldg_di  dest, [B, C]      is I=0b00000 & ldg_di & ldg_a & ldg_Z=0b10 & ldg_x & dest & B & C { local old_B:4 = B; writeback(B, old_B + C, ldg_a); ldext(dest, *[ram]:2 (old_B + C), ldg_x); }
-
-:ld^lds_x^lds_a^lds_di  dest, [#B_D, #D]   is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b00 & lds_x & dest & B=63 & D [ B_D = D + 0; ] { dest = *[ram]:4 (D:4 + D); }
-:ld^lds_x^lds_a^lds_di  dest, [#Limm, #D]  is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b00 & lds_x & dest & B=62 & D ; Limm { dest = *[ram]:4 (Limm:4 + D); }
-:ld^lds_x^lds_a^lds_di  dest, [B, #D]      is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b00 & lds_x & dest & B & D { local old_B:4 = B; writeback(B, old_B + D, lds_a); dest = *[ram]:4 (old_B + D); }
-
-:ldb^lds_x^lds_a^lds_di  dest, [#B_D, #D]   is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b01 & lds_x & dest & B=63 & D [ B_D = D + 0; ] { ldext(dest, *[ram]:1 (D:4 + D), lds_x); }
-:ldb^lds_x^lds_a^lds_di  dest, [#Limm, #D]  is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b01 & lds_x & dest & B=62 & D ; Limm { ldext(dest, *[ram]:1 (Limm:4 + D), lds_x); }
-:ldb^lds_x^lds_a^lds_di  dest, [B, #D]      is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b01 & lds_x & dest & B & D { local old_B:4 = B; writeback(B, old_B + D, lds_a); ldext(dest, *[ram]:1 (old_B + D), lds_x); }
-
-:ldw^lds_x^lds_a^lds_di  dest, [#B_D, #D]   is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b10 & lds_x & dest & B=63 & D [ B_D = D + 0; ] { ldext(dest, *[ram]:2 (D:4 + D), lds_x); }
-:ldw^lds_x^lds_a^lds_di  dest, [#Limm, #D]  is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b10 & lds_x & dest & B=62 & D ; Limm { ldext(dest, *[ram]:2 (Limm:4 + D), lds_x); }
-:ldw^lds_x^lds_a^lds_di  dest, [B, #D]      is I=0b00001 & lds_di & lds_13=0 & lds_a & lds_Z=0b10 & lds_x & dest & B & D { local old_B:4 = B; writeback(B, old_B + D, lds_a); ldext(dest, *[ram]:2 (old_B + D), lds_x); }
-
-:lr  dest, [ar_D]   is I=0b00001 & lds_Di=0 & lds_13=1 & lds_A=0 & lds_Z=0b00 & lds_X=0 & dest & B=63 & ar_D { dest = ar_D; }
-:lr  dest, [#Limm]  is I=0b00001 & lds_Di=0 & lds_13=1 & lds_A=0 & lds_Z=0b00 & lds_X=0 & dest & B=62 ; Limm { dest = *[auxregs]:4 (Limm:4); }
-:lr  dest, [B]      is I=0b00001 & lds_Di=0 & lds_13=1 & lds_A=0 & lds_Z=0b00 & lds_X=0 & dest & B { dest = *[auxregs]:4 (B); }
-
-
+macro lpsetup(endaddr) {
+	*[auxregs]:4 2:4 = inst_next >> 2;
+	*[auxregs]:4 3:4 = endaddr >> 2;
+	is_in_loop = 1;
 }
+
+# j [b] / jl [b]
+jreg: "["^B^"]" is B { export B; }
+jnd: "" is Nul=0 | Nul=3 {}
+jnd: ".d" is Nul=1 {}
+jnd: ".jd" is cjl=0 & Nul=2 {}
+jnd: ""    is cjl=1 & Nul=2 {}   # JD is the required mode of jl to a long immediate
+jlimm: addr is limm [ addr = (limm & 0xffffff) << 2; ] { export *[ram]:4 addr; }
+jshimm: addr is D [ addr = (D & 0xffffff) << 2; ] { export *[ram]:4 addr; }
+
+# ---------------------------------------------------------------------------------------------
+# Loads and stores. Sizes: 0 long word, 1 byte, 2 word (3 is reserved); .x sign-extends,
+# .a writes the address back to a base register, .di bypasses the data cache.
+
+lgdi: "" is lg_Di=0 {} lgdi: ".di" is lg_Di=1 {}
+lsdi: "" is ls_Di=0 {} lsdi: ".di" is ls_Di=1 {}
+stdi: "" is st_Di=0 {} stdi: ".di" is st_Di=1 {}
+# register + register loads: the C field decides when it holds a short immediate (as for ALU ops)
+ldfg: ".f" is Cr=61 {}
+ldfg: ""   is Cr=63 {}
+ldfg: ".f" is Br=61 & (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb0=0)) {}
+ldfg: ""   is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & (Bb1=1 | (Bb1=0 & Bb0=0)))) & (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb0=0)) {}
+# lr: objdump shows ".f" for the flag-setting short-immediate indicator 61 (it has no effect)
+ldfs: ".f" is Br=61 {}
+ldfs: ""   is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & (Bb1=1 | (Bb1=0 & Bb0=0)))) {}
+
+# Effective address of the register + register form (I=0)
+lgaddr: "["^B^","^srcC^"]"  is ((Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb1=0 & Bb0=0)) & B) ... & srcC ... { local ea:4 = B + srcC; export ea; }
+lgaddr: "["^fc^"]"           is (Br=61 | Br=63) & D=0 & (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb1=0 & Cb0=0)) & fc { export fc; }
+lgaddr: "["^D^","^fc^"]"     is (Br=61 | Br=63) & D & (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb1=0 & Cb0=0)) & fc   { local ea:4 = D + fc; export ea; }
+lgaddr: "["^D^","^D2^"]"    is (Br=61 | Br=63) & D & D2 & (Cr=61 | Cr=63) { local ea:4 = D + D; export ea; }
+lgaddr: "[0]"               is (Br=61 | Br=63) & D=0 & (Cr=61 | Cr=63) { export 0:4; }
+lgaddr: "["^limm^"]"           is (Br=61 | Br=63) & D=0 & Cr=62; limm { export *[const]:4 limm; }
+lgaddr: "["^D^","^limm^"]"    is (Br=61 | Br=63) & D & Cr=62; limm { local ea:4 = D + limm; export ea; }
+lgaddr: "["^limm^","^fc^"]"  is Br=62 & (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb1=0 & Cb0=0)) & fc; limm            { local ea:4 = limm + fc; export ea; }
+lgaddr: "["^limm^","^D^"]"  is Br=62 & D & (Cr=61 | Cr=63); limm   { local ea:4 = limm + D; export ea; }
+lgaddr: "["^limm^","^limm2^"]" is Br=62 & Cr=62; limm & limm2               { local ea:4 = limm + limm; export ea; }
+
+# Effective address of the register + offset forms (LD I=1, ST I=2): b + D
+lsaddr: "["^B^"]"          is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb1=0 & Bb0=0)) & B & D=0   { export B; }
+lsaddr: "["^B^","^D^"]"    is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb1=0 & Bb0=0)) & B & D     { local ea:4 = B + D; export ea; }
+lsaddr: "["^ea^"]"         is (Br=61 | Br=63) & D [ ea = D + D; ] { export *[const]:4 ea; }
+lsaddr: "["^ea^"]"         is Br=62 & D; limm [ ea = (limm + D) & 0xffffffff; ] { export *[const]:4 ea; }
+
+# Store data: c, short immediate or long immediate
+stdata: fc     is (Cb5=0 | (Cb5=1 & Cb4=0) | (Cb5=1 & Cb4=1 & Cb3=0) | Ct=14 | (Ct=15 & Cb1=0 & Cb0=0)) & fc          { export fc; }
+stdata: D     is (Cr=61 | Cr=63) & D { export *[const]:4 D; }
+stdata: limm  is Cr=62; limm        { export *[const]:4 limm; }
+
+@include "ARC32_ops.sinc"
+
+# Sub-opcode 0x3f: BRK, SLEEP, SWI selected by the short-immediate field
+:brk   is I=0x03 & Cr=0x3f & D=0 { brk(); }
+:sleep is I=0x03 & Cr=0x3f & D=1 { sleep(); }
+:swi   is I=0x03 & Cr=0x3f & D=2 { swi(); }
+
+# xor 0,-1,-1 (0x7fffffff) is the NOP of the manual and of objdump
+:nop is I=0x0f & Ar=63 & Br=63 & Cr=63 & Du=0x1ff { }
+
+# ---------------------------------------------------------------------------------------------
+# Auxiliary registers: lr a,[b] (I=1, bit 13) and sr c,[b] (I=2, bit 25). The register number
+# is operand b (register, short or long immediate). Reading STATUS returns the flags and the
+# address of the next instruction.
+
+auxnum: "status"    is (Br=61 | Br=63) & D=0 { export 0:4; }
+auxnum: "semaphore" is (Br=61 | Br=63) & D=1 { export 1:4; }
+auxnum: "lp_start"  is (Br=61 | Br=63) & D=2 { export 2:4; }
+auxnum: "lp_end"    is (Br=61 | Br=63) & D=3 { export 3:4; }
+auxnum: "identity"  is (Br=61 | Br=63) & D=4 { export 4:4; }
+auxnum: "debug"     is (Br=61 | Br=63) & D=5 { export 5:4; }
+auxnum: n           is (Br=61 | Br=63) & D [ n = D & 0xffffffff; ] { export *[const]:4 n; }
+auxnum: limm        is Br=62; limm { export *[const]:4 limm; }
+auxnum: B           is (Bb5=0 | (Bb5=1 & Bb4=0) | (Bb5=1 & Bb4=1 & Bb3=0) | Bt=14 | (Bt=15 & Bb1=0 & Bb0=0)) & B { export B; }
+
+:lr^ldfs dst, "["^auxnum^"]" is (I=0x01 & ls_LR=1 & ldfs & dst) ... & auxnum ... {
+	dst = *[auxregs]:4 auxnum;
+}
+:lr^ldfs dst, "[status]" is I=0x01 & ls_LR=1 & ldfs & dst & (Br=61 | Br=63) & D=0 {
+	local s:4; getstatus(s, inst_next);
+	dst = s;
+}
+:sr^ldfg stdata, "["^auxnum^"]" is (I=0x02 & st_SR=1 & ldfg) ... & stdata ... & auxnum ... {
+	*[auxregs]:4 auxnum = stdata;
+}
+# Writing LP_END activates the loop mechanism (a loop set up with SR rather than LP; the loop end
+# is marked by the Arc32LoopAnalyzer when the address is a constant)
+:sr^ldfg stdata, "[lp_end]" is (I=0x02 & st_SR=1 & ldfg & (Br=61 | Br=63) & D=3) ... & stdata ... {
+	*[auxregs]:4 3:4 = stdata;
+	is_in_loop = 1;
+}
+
+} # end of "with : phase=1"
