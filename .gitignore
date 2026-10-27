@@ -1,0 +1,6 @@
+*.sla
+lib/
+build/
+dist/
+.gradle/
+__pycache__/

@@ -1,6 +1,12 @@
 ##VERSION: 2.0
+.gitignore||GHIDRA||||END|
+CREDITS.md||GHIDRA||||END|
+GHIDRA-RARE.md||GHIDRA||||END|
+LICENSE||GHIDRA||||END|
 Module.manifest||GHIDRA||||END|
-data/build.xml||GHIDRA||||END|
+README.md||GHIDRA||||END|
+build.gradle||GHIDRA||||END|
+data/buildLanguage.xml||GHIDRA||||END|
 data/languages/ARC.ldefs||GHIDRA||||END|
 data/languages/ARC.opinion||GHIDRA||||END|
 data/languages/ARC32.cspec||GHIDRA||||END|
@@ -9,3 +15,6 @@ data/languages/ARC32.pspec||GHIDRA||||END|
 data/languages/ARC32.sinc||GHIDRA||||END|
 data/languages/ARC32_be.slaspec||GHIDRA||||END|
 data/languages/ARC32_le.slaspec||GHIDRA||||END|
+data/languages/ARC32_ops.sinc||GHIDRA||||END|
+data/sleighArgs.txt||GHIDRA||||END|
+extension.properties||GHIDRA||||END|
