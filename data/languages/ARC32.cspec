@@ -1,12 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Calling convention of GCC for the legacy ARC target (gcc 4.5.4, arc-elf, checked by
+     compiling test functions): arguments in r0-r7, then on the stack from sp+16 (the 16 bytes
+     below are the caller's frame-link area); results in r0 (r1:r0 for 64-bit values); r16-r23,
+     fp (r27) and sp are preserved (r24 and r25 are not allocated by GCC); blink holds the return address in STATUS-register format
+     (flags in bits 31-25, PC/4 in bits 23-0). -->
 <compiler_spec>
   <data_organization>
-    <absolute_max_alignment value="8" />
+    <absolute_max_alignment value="0" />
     <machine_alignment value="4" />
     <default_alignment value="1" />
     <default_pointer_alignment value="4" />
     <pointer_size value="4" />
-    <wchar_size value="2" />
+    <wchar_size value="4" />
     <short_size value="2" />
     <integer_size value="4" />
     <long_size value="4" />
@@ -18,7 +23,7 @@
       <entry size="1" alignment="1" />
       <entry size="2" alignment="2" />
       <entry size="4" alignment="4" />
-      <entry size="8" alignment="8" />
+      <entry size="8" alignment="4" />
     </size_alignment_map>
   </data_organization>
 
@@ -27,42 +32,26 @@
   </global>
 
   <stackpointer register="sp" space="ram"/>
+  <returnaddress>
+    <register name="blink"/>
+  </returnaddress>
 
   <default_proto>
     <prototype name="__stdcall" extrapop="0" stackshift="0">
       <input>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r0"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r1"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r2"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r3"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r4"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r5"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r6"/>
-        </pentry>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r7"/>
-        </pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r0"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r1"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r2"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r3"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r4"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r5"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r6"/></pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r7"/></pentry>
+        <pentry minsize="1" maxsize="500" align="4"><addr offset="16" space="stack"/></pentry>
       </input>
       <output>
-        <pentry minsize="1" maxsize="4" extension="inttype">
-          <register name="r0"/>
-        </pentry>
-        <pentry minsize="5" maxsize="8">
-          <addr space="join" piece1="r1" piece2="r0"/>
-        </pentry>
+        <pentry minsize="1" maxsize="4" extension="inttype"><register name="r0"/></pentry>
+        <pentry minsize="5" maxsize="8"><addr space="join" piece1="r1" piece2="r0"/></pentry>
       </output>
       <unaffected>
         <register name="r16"/>
@@ -73,69 +62,28 @@
         <register name="r21"/>
         <register name="r22"/>
         <register name="r23"/>
+        <register name="fp"/>
+        <register name="sp"/>
       </unaffected>
+      <killedbycall>
+        <register name="r0"/>
+        <register name="r1"/>
+        <register name="r2"/>
+        <register name="r3"/>
+        <register name="r4"/>
+        <register name="r5"/>
+        <register name="r6"/>
+        <register name="r7"/>
+        <register name="r8"/>
+        <register name="r9"/>
+        <register name="r10"/>
+        <register name="r11"/>
+        <register name="r12"/>
+        <register name="r13"/>
+        <register name="r14"/>
+        <register name="r15"/>
+        <register name="blink"/>
+      </killedbycall>
     </prototype>
   </default_proto>
-
-  <prototype name="__stdcall64" extrapop="0" stackshift="0" strategy="register">
-    <input>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r0"/>
-      </pentry>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r1"/>
-      </pentry>
-      <pentry minsize="5" maxsize="8">
-        <addr space="join" piece1="r1" piece2="r0"/>
-      </pentry>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r2"/>
-      </pentry>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r3"/>
-      </pentry>
-      <pentry minsize="5" maxsize="8">
-        <addr space="join" piece1="r3" piece2="r2"/>
-      </pentry>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r4"/>
-      </pentry>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r5"/>
-      </pentry>
-      <pentry minsize="5" maxsize="8">
-        <addr space="join" piece1="r5" piece2="r4"/>
-      </pentry>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r6"/>
-      </pentry>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r7"/>
-      </pentry>
-      <pentry minsize="5" maxsize="8">
-        <addr space="join" piece1="r7" piece2="r6"/>
-      </pentry>
-      <pentry minsize="1" maxsize="500" align="4">
-        <addr offset="0" space="stack"/>
-      </pentry>
-    </input>
-    <output>
-      <pentry minsize="1" maxsize="4" extension="inttype">
-        <register name="r0"/>
-      </pentry>
-      <pentry minsize="5" maxsize="8">
-        <addr space="join" piece1="r1" piece2="r0"/>
-      </pentry>
-    </output>
-    <unaffected>
-      <register name="r16"/>
-      <register name="r17"/>
-      <register name="r18"/>
-      <register name="r19"/>
-      <register name="r20"/>
-      <register name="r21"/>
-      <register name="r22"/>
-      <register name="r23"/>
-    </unaffected>
-  </prototype>
 </compiler_spec>

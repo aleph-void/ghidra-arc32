@@ -1,4 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <processor_spec>
   <programcounter register="pc"/>
+  <context_data>
+    <context_set space="ram">
+      <set name="phase" val="0"/>
+    </context_set>
+  </context_data>
+  <register_data>
+    <register name="contextreg" hidden="true"/>
+    <register name="discard" hidden="true"/>
+    <register name="r61" hidden="true"/>
+    <register name="r62" hidden="true"/>
+    <register name="r63" hidden="true"/>
+  </register_data>
+  <default_symbols>
+    <symbol name="STATUS" address="auxregs:0"/>
+    <symbol name="SEMAPHORE" address="auxregs:1"/>
+    <symbol name="LP_START" address="auxregs:2"/>
+    <symbol name="LP_END" address="auxregs:3"/>
+    <symbol name="IDENTITY" address="auxregs:4"/>
+    <symbol name="DEBUG" address="auxregs:5"/>
+    <symbol name="MULHI" address="auxregs:0x12"/>
+  </default_symbols>
 </processor_spec>

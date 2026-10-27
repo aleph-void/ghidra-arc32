@@ -1,5 +1,6 @@
 <dwarf>
-  <!-- FIXME: These mappings are guessed, so we need to reference the GCC sources to determine what the real ones are. -->
+  <!-- Checked against the DWARF output of GCC 4.5.4 (arc-elf): r0-r31 by number (fp = 27, sp = 28),
+       lp_count = 60. -->
   <register_mappings>
     <register_mapping dwarf="0" ghidra="r0" auto_count="26" /> <!-- r0..r25 -->
     <register_mapping dwarf="26" ghidra="gp" />
